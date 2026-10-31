@@ -15,6 +15,39 @@ Last updated: **2026-10-31**. This guide covers native EdgeOS `.tar` system-imag
 
 Development records include a first native debug installation from an official EdgeOS 3.0.1 baseline, followed by component fixes. They do not establish that every published image works from every EdgeOS version. Upgrades from OpenWrt or a changed storage layout are outside this guide. Project-to-project upgrades must also be explicitly covered by the target release.
 
+### Bootloader prerequisite
+
+Before first installing this firmware, update to the **latest official bootloader available for your exact model**, using official EdgeOS and [Ubiquiti's bootloader update procedure](https://help.uisp.com/hc/en-us/articles/22591243829911-EdgeRouter-How-to-Update-the-Bootloader). ER-4 bootloader updates are separate from system-image upgrades and are not automatically applied by an EdgeOS firmware upgrade.
+
+In the official EdgeOS operational CLI, inspect the bootloader with:
+
+```text
+show system boot-image
+```
+
+This compares the installed bootloader with the one bundled in the current official firmware; it is not an online check for the latest version. Use the applicable official firmware and guidance, rather than a fixed version number copied from an old example.
+
+Complete any required update, reboot, and verification in the official environment before installing this project's firmware. Bootloader writes must not be interrupted. If the version or update result is unclear, stop and resolve it first. Do not attempt the update from this experimental firmware.
+
+### Boot and storage safeguards
+
+The current ER-4 development firmware includes the following measures to reduce the risk of an unbootable device or storage damage:
+
+| Measure | Protection and limits |
+| --- | --- |
+| Skip automatic bootloader writes | The platform startup script skips its automatic bootloader update and bootloader-corruption recovery branches. This avoids those startup-triggered writes; it does not disable normal system boot or the bootloader's own recovery entry |
+| Read-only SPI partitions | The kernel/device tree marks the SPI bootloader regions and EEPROM read-only through the normal Linux MTD interfaces. The configuration also prevents the old command-line partition table from overriding this policy or exposing a writable MTD master device. This is software protection, not a permanent hardware lock or protection against every possible write path |
+| Preserve the native storage layout | Early boot uses the existing system-image files and configuration directory; it does not repartition or format storage. The SquashFS base is read-only and changes go to a writable overlay. The persistent filesystem is still writable, so this is not a write-free boot |
+| Early-boot checks and console rescue | Checks for the storage device, root image, preserved configuration, required mounts, and init program enter a serial rescue shell on failure instead of formatting storage or replacing configuration. This requires the kernel and early boot environment to start successfully; it cannot rescue every boot failure |
+| Ordered shutdown from RAM | Normal shutdown/reboot uses a RAM environment to release the overlay and root-image loop devices, synchronize writes, and unmount persistent storage in order. This reduces risks from an unclean normal shutdown; it does not protect against sudden power loss |
+| Build-time image checks | Packaging checks archive members, file types, kernel/rootfs formats, and checksums. These checks help catch malformed artifacts, but do not guarantee successful installation, authenticity, or complete hardware compatibility |
+
+The bootloader write protection is a **development/testing policy**. It does not automatically expire or unlock after a successful boot; any future change must be documented for the affected release. EEPROM writes are also restricted while this policy is active. Complete the official bootloader prerequisite **before** entering this protected environment; do not remove the protection to update it here.
+
+Development records include checks of selected read-only MTD states and normal RAM shutdown/reboot behavior on an ER-4. Those results do not automatically cover every downloadable image. Each release must identify which safeguards its actual kernel, device tree, and startup files contain, including whether an existing overlay can override protected files.
+
+These measures do not provide automatic rollback, a guaranteed intact backup image, or a guarantee against bricking. The native upgrader can still modify stored images, and a failed kernel, damaged storage, or interrupted installation may require independent recovery. Keep off-device backups and console/recovery access ready.
+
 ## 2. Prepare equipment, access, and backups
 
 | Item | Preparation |
@@ -39,7 +72,7 @@ show system storage
 
 Confirm the model, current version, image state, and available storage. The release must define its space requirements; the archive size alone does not account for upload, extraction, and installed files. For CLI uploads to `/tmp`, also check its available space with `df -h /tmp` in the router shell. If space is insufficient, stop and assess it. Do not blindly delete the previous image or other system files to make room.
 
-This guide does **not** update the bootloader. Do not run `add system boot-image`, `ubnt-upgrade-boot`, `flash_erase`, raw partition writes, or repartitioning commands as part of these steps. If a release or recovery method requires a bootloader change, stop: that prerequisite is outside this guide.
+Complete the bootloader prerequisite above as a separate official maintenance task. The system-image installation steps below do **not** update the bootloader: do not run `add system boot-image`, `ubnt-upgrade-boot`, `flash_erase`, raw partition writes, or repartitioning commands during those steps. This project's firmware is not a bootloader update package.
 
 ## 3. Verify the firmware download
 
@@ -142,6 +175,6 @@ Official recovery references:
 - [Ubiquiti: TFTP recovery](https://help.uisp.com/hc/en-us/articles/22591244564887-EdgeRouter-TFTP-Recovery) — reset-button recovery depends on the existing bootloader and uses a recovery image, not this project's upgrade `.tar`.
 - [Ubiquiti: manual TFTP recovery](https://help.uisp.com/hc/en-us/articles/22591244620311-EdgeRouter-Manual-TFTP-Recovery) — console-based recovery; follow the ER-4/e300 section and the correct recovery file type.
 
-Official recovery erases custom configuration. It is not a lossless rollback, and recovery is not guaranteed for every failure. These links describe vendor procedures; independent recovery after this project's firmware has not completed full acceptance. Do not update the bootloader just to satisfy a recovery prerequisite under this guide.
+Official recovery erases custom configuration. It is not a lossless rollback, and recovery is not guaranteed for every failure. These links describe vendor procedures; independent recovery after this project's firmware has not completed full acceptance. Resolve bootloader prerequisites in the official environment before installation, rather than attempting a bootloader update as an improvised recovery step.
 
 When reporting a failure, include the exact release, SHA-256, starting firmware, chosen installation method, complete error output, and redacted console logs. Follow the [bug report guidance](README.md#bug-reports-and-discussion).

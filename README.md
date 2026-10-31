@@ -65,11 +65,15 @@ Each release should provide:
 - Exact supported models, version, build date, and debug/release mode.
 - Firmware files and SHA-256 checksums.
 - Changes, tested functions, known issues, and untested areas.
-- Required starting firmware, configuration compatibility, and installation steps.
+- Required starting firmware and bootloader, configuration compatibility, and installation steps.
 - Backup requirements, recovery prerequisites, and the tested scope of upgrade/rollback.
 - Component/source provenance and applicable licensing notices.
 
-Before installing, back up the original configuration and keep the backup off the router. Confirm the image model and checksum, and prepare the recovery access described in that release. Preserving `config.boot` does not guarantee that every configuration item will migrate successfully. Do not assume automatic rollback. Bootloader updates are outside the current testing scope; this README provides no bootloader modification procedure.
+Before installing, back up the original configuration and keep the backup off the router. Confirm the image model and checksum, and prepare the recovery access described in that release. Preserving `config.boot` does not guarantee that every configuration item will migrate successfully. Do not assume automatic rollback.
+
+Before first installation, update to the latest official bootloader for your exact model in the official EdgeOS environment. See the [bootloader prerequisite](INSTALL.md#bootloader-prerequisite) for checks and the official update reference. This project's system-image installation does not perform that update.
+
+The current development firmware reduces boot/storage risks by skipping automatic bootloader writes, applying read-only SPI protection, preserving the native storage layout, checking early-boot prerequisites, and performing ordered shutdown from RAM. See [boot and storage safeguards](INSTALL.md#boot-and-storage-safeguards) for their scope and release-specific verification requirements. These measures do not guarantee recovery or automatic rollback.
 
 ## Bug reports and discussion
 
