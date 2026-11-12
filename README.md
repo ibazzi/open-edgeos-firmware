@@ -71,9 +71,9 @@ Each release should provide:
 
 Before installing, back up the original configuration and keep the backup off the router. Confirm the image model and checksum, and prepare the recovery access described in that release. Preserving `config.boot` does not guarantee that every configuration item will migrate successfully. Do not assume automatic rollback.
 
-Before first installation, update to the latest official bootloader for your exact model in the official EdgeOS environment. See the [bootloader prerequisite](INSTALL.md#bootloader-prerequisite) for checks and the official update reference. This project's system-image installation does not perform that update.
+Before first installation, update both the official EdgeOS firmware and the bootloader to the latest official versions available for your exact model in the official EdgeOS environment. Complete all required reboots and verify both updates before proceeding. See the [bootloader prerequisite](INSTALL.md#bootloader-prerequisite) for checks and the official update reference. This project's system-image installation does not perform those prerequisite updates.
 
-The current development firmware reduces boot/storage risks by skipping automatic bootloader writes, applying read-only SPI protection, preserving the native storage layout, checking early-boot prerequisites, and performing ordered shutdown from RAM. See [boot and storage safeguards](INSTALL.md#boot-and-storage-safeguards) for their scope and release-specific verification requirements. These measures do not guarantee recovery or automatic rollback.
+The current development firmware skips automatic bootloader writes, marks the SPI bootloader partitions read-only, preserves the native storage layout, and uses kernel-owned root mounting and standard systemd shutdown. See [boot and storage safeguards](INSTALL.md#boot-and-storage-safeguards) for their scope and release-specific verification requirements. These measures do not guarantee recovery, complete unmounting, power-loss safety, or automatic rollback.
 
 ## Bug reports and discussion
 

@@ -2,7 +2,7 @@
 
 English | [简体中文](INSTALL.zh-CN.md) | [Project README](README.md)
 
-Last updated: **2026-10-31**. This guide covers native EdgeOS `.tar` system-image installation on **ER-4 only**, subject to the requirements of the exact release. It is not an OpenWrt sysupgrade or raw-disk flashing guide.
+Last updated: **2026-11-12**. This guide covers native EdgeOS `.tar` system-image installation on **ER-4 only**, subject to the requirements of the exact release. It is not an OpenWrt sysupgrade or raw-disk flashing guide.
 
 > Read the [disclaimer](README.md#disclaimer) before proceeding. The firmware is experimental. Installation may interrupt service, lose configuration, or leave the device unable to boot. A working backup and recovery plan are essential.
 
@@ -17,7 +17,7 @@ Development records include a first native debug installation from an official E
 
 ### Bootloader prerequisite
 
-Before first installing this firmware, update to the **latest official bootloader available for your exact model**, using official EdgeOS and [Ubiquiti's bootloader update procedure](https://help.uisp.com/hc/en-us/articles/22591243829911-EdgeRouter-How-to-Update-the-Bootloader). ER-4 bootloader updates are separate from system-image upgrades and are not automatically applied by an EdgeOS firmware upgrade.
+Before first installing this firmware, update to both the **latest official EdgeOS firmware** and the **latest official bootloader available for your exact model**. Perform both updates in the official EdgeOS environment, complete all required reboots, and verify that both updates have taken effect before installing this project's firmware. Follow [Ubiquiti's bootloader update procedure](https://help.uisp.com/hc/en-us/articles/22591243829911-EdgeRouter-How-to-Update-the-Bootloader). ER-4 bootloader updates are separate from system-image upgrades and are not automatically applied by an EdgeOS firmware upgrade.
 
 In the official EdgeOS operational CLI, inspect the bootloader with:
 
@@ -36,15 +36,15 @@ The current ER-4 development firmware includes the following measures to reduce 
 | Measure | Protection and limits |
 | --- | --- |
 | Skip automatic bootloader writes | The platform startup script skips its automatic bootloader update and bootloader-corruption recovery branches. This avoids those startup-triggered writes; it does not disable normal system boot or the bootloader's own recovery entry |
-| Read-only SPI partitions | The kernel/device tree marks the SPI bootloader regions and EEPROM read-only through the normal Linux MTD interfaces. The configuration also prevents the old command-line partition table from overriding this policy or exposing a writable MTD master device. This is software protection, not a permanent hardware lock or protection against every possible write path |
+| Read-only SPI bootloader partitions | The kernel/device tree marks `boot0` and `boot1` read-only through the normal Linux MTD interfaces. The EEPROM partition is not marked read-only by this policy in the current source. The configuration also prevents the old command-line partition table from overriding this policy or exposing a writable MTD master device. This is software protection, not a permanent hardware lock or protection against every possible write path |
 | Preserve the native storage layout | Early boot uses the existing system-image files and configuration directory; it does not repartition or format storage. The SquashFS base is read-only and changes go to a writable overlay. The persistent filesystem is still writable, so this is not a write-free boot |
-| Early-boot checks and console rescue | Checks for the storage device, root image, preserved configuration, required mounts, and init program enter a serial rescue shell on failure instead of formatting storage or replacing configuration. This requires the kernel and early boot environment to start successfully; it cannot rescue every boot failure |
-| Ordered shutdown from RAM | Normal shutdown/reboot uses a RAM environment to release the overlay and root-image loop devices, synchronize writes, and unmount persistent storage in order. This reduces risks from an unclean normal shutdown; it does not protect against sudden power loss |
+| Kernel-owned root mounting | The kernel mounts the data filesystem, SquashFS loop image, and writable overlay before starting systemd. Mount failures follow the native kernel failure/panic path; the current release does not provide a custom early-init serial rescue shell |
+| Standard systemd shutdown | Normal shutdown/reboot follows systemd's service-stop, sync, read-only remount, unmount attempts, and final kernel action. There is no custom RAM shutdown hook. Historical unmount and watchdog warnings remain unresolved; normal reboot does not establish power-loss safety |
 | Build-time image checks | Packaging checks archive members, file types, kernel/rootfs formats, and checksums. These checks help catch malformed artifacts, but do not guarantee successful installation, authenticity, or complete hardware compatibility |
 
-The bootloader write protection is a **development/testing policy**. It does not automatically expire or unlock after a successful boot; any future change must be documented for the affected release. EEPROM writes are also restricted while this policy is active. Complete the official bootloader prerequisite **before** entering this protected environment; do not remove the protection to update it here.
+The bootloader write protection is a **development/testing policy**. It does not automatically expire or unlock after a successful boot; any future change must be documented for the affected release. Complete the official firmware and bootloader prerequisites **before** entering this protected environment; do not remove the protection to update the bootloader here.
 
-Development records include checks of selected read-only MTD states and normal RAM shutdown/reboot behavior on an ER-4. Those results do not automatically cover every downloadable image. Each release must identify which safeguards its actual kernel, device tree, and startup files contain, including whether an existing overlay can override protected files.
+Development records include checks of selected read-only MTD states and normal boot/reboot behavior on an ER-4. Those results do not automatically cover every downloadable image. Each release must identify which safeguards its actual kernel, device tree, and startup files contain, including whether an existing overlay can override protected files.
 
 These measures do not provide automatic rollback, a guaranteed intact backup image, or a guarantee against bricking. The native upgrader can still modify stored images, and a failed kernel, damaged storage, or interrupted installation may require independent recovery. Keep off-device backups and console/recovery access ready.
 
