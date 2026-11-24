@@ -2,7 +2,7 @@
 
 English | [简体中文](INSTALL.zh-CN.md) | [Project README](README.md)
 
-Last updated: **2026-11-12**. This guide covers native EdgeOS `.tar` system-image installation on **ER-4 only**, subject to the requirements of the exact release. It is not an OpenWrt sysupgrade or raw-disk flashing guide.
+Choose an image explicitly listed for your platform in the release notes. Sections 1–6 cover the ER-4 native EdgeOS `.tar` system-image installation. See [x86_64](#x86_64) and [ARM64 UEFI](#arm64-uefi) for fresh installs and A/B upgrades on those platforms.
 
 > Read the [disclaimer](README.md#disclaimer) before proceeding. The firmware is experimental. Installation may interrupt service, lose configuration, or leave the device unable to boot. A working backup and recovery plan are essential.
 
@@ -17,7 +17,7 @@ Development records include a first native debug installation from an official E
 
 ### Bootloader prerequisite
 
-Before first installing this firmware, update to both the **latest official EdgeOS firmware** and the **latest official bootloader available for your exact model**. Perform both updates in the official EdgeOS environment, complete all required reboots, and verify that both updates have taken effect before installing this project's firmware. Follow [Ubiquiti's bootloader update procedure](https://help.uisp.com/hc/en-us/articles/22591243829911-EdgeRouter-How-to-Update-the-Bootloader). ER-4 bootloader updates are separate from system-image upgrades and are not automatically applied by an EdgeOS firmware upgrade.
+Before first installing Open EdgeOS on ER-4, update to the latest official EdgeOS firmware and the latest official bootloader for the exact model. Complete both updates in the official EdgeOS environment, where firmware and bootloader updates are separate operations. [Official firmware update](https://help.uisp.com/hc/en-us/articles/22591203404311-EdgeRouter-How-to-Upgrade-the-EdgeOS-Firmware) · [Official bootloader update](https://help.uisp.com/hc/en-us/articles/22591243829911-EdgeRouter-How-to-Update-the-Bootloader)
 
 In the official EdgeOS operational CLI, inspect the bootloader with:
 
@@ -36,15 +36,14 @@ The current ER-4 development firmware includes the following measures to reduce 
 | Measure | Protection and limits |
 | --- | --- |
 | Skip automatic bootloader writes | The platform startup script skips its automatic bootloader update and bootloader-corruption recovery branches. This avoids those startup-triggered writes; it does not disable normal system boot or the bootloader's own recovery entry |
-| Read-only SPI bootloader partitions | The kernel/device tree marks `boot0` and `boot1` read-only through the normal Linux MTD interfaces. The EEPROM partition is not marked read-only by this policy in the current source. The configuration also prevents the old command-line partition table from overriding this policy or exposing a writable MTD master device. This is software protection, not a permanent hardware lock or protection against every possible write path |
-| Preserve the native storage layout | Early boot uses the existing system-image files and configuration directory; it does not repartition or format storage. The SquashFS base is read-only and changes go to a writable overlay. The persistent filesystem is still writable, so this is not a write-free boot |
-| Kernel-owned root mounting | The kernel mounts the data filesystem, SquashFS loop image, and writable overlay before starting systemd. Mount failures follow the native kernel failure/panic path; the current release does not provide a custom early-init serial rescue shell |
-| Standard systemd shutdown | Normal shutdown/reboot follows systemd's service-stop, sync, read-only remount, unmount attempts, and final kernel action. There is no custom RAM shutdown hook. Historical unmount and watchdog warnings remain unresolved; normal reboot does not establish power-loss safety |
+| Read-only bootloader partitions | The ER-4 runtime device-tree fixup marks `boot0` and `boot1` read-only through Linux MTD |
+| Preserve the native storage layout | The kernel mounts the SquashFS system image with a writable overlay and uses the existing configuration directory |
+| Standard shutdown and reboot | systemd manages the normal shutdown and reboot sequence |
 | Build-time image checks | Packaging checks archive members, file types, kernel/rootfs formats, and checksums. These checks help catch malformed artifacts, but do not guarantee successful installation, authenticity, or complete hardware compatibility |
 
-The bootloader write protection is a **development/testing policy**. It does not automatically expire or unlock after a successful boot; any future change must be documented for the affected release. Complete the official firmware and bootloader prerequisites **before** entering this protected environment; do not remove the protection to update the bootloader here.
+The bootloader write protection applies during development and testing. Complete the official bootloader update before installing this firmware.
 
-Development records include checks of selected read-only MTD states and normal boot/reboot behavior on an ER-4. Those results do not automatically cover every downloadable image. Each release must identify which safeguards its actual kernel, device tree, and startup files contain, including whether an existing overlay can override protected files.
+Check the release notes for the boot and storage behavior verified on the exact artifact.
 
 These measures do not provide automatic rollback, a guaranteed intact backup image, or a guarantee against bricking. The native upgrader can still modify stored images, and a failed kernel, damaged storage, or interrupted installation may require independent recovery. Keep off-device backups and console/recovery access ready.
 
@@ -178,3 +177,147 @@ Official recovery references:
 Official recovery erases custom configuration. It is not a lossless rollback, and recovery is not guaranteed for every failure. These links describe vendor procedures; independent recovery after this project's firmware has not completed full acceptance. Resolve bootloader prerequisites in the official environment before installation, rather than attempting a bootloader update as an improvised recovery step.
 
 When reporting a failure, include the exact release, SHA-256, starting firmware, chosen installation method, complete error output, and redacted console logs. Follow the [bug report guidance](README.md#bug-reports-and-discussion).
+
+## x86_64
+
+Verify the downloaded file against the release's `SHA256SUMS`. For a fresh VM installation, import the x86_64 `.qcow2` as its boot disk. For a physical installation, choose the 4 GiB GPT disk image by the destination disk's **logical** sector size:
+
+| Logical sector size | Image suffix | Boot mode |
+| --- | --- | --- |
+| 512 bytes, including 512e | `-release.img.gz` | Legacy BIOS or 64-bit UEFI |
+| 4096 bytes (4Kn) | `-release-4kn.img.gz` | 64-bit UEFI |
+
+Disable Secure Boot for UEFI. Back up the destination disk, decompress the chosen image, and write it to the entire target disk. This replaces its partition table and data. On first boot, use the screen or a compatible serial console (`ttyS0`, 115200 8N1). With factory settings, the first detected Ethernet port uses `192.168.1.1/24`.
+
+To upgrade an existing x86_64 Open EdgeOS A/B installation, use the matching x86_64 `-release.tar` as described under [A/B upgrades](#ab-upgrades).
+
+### Create a VMware VMDK
+
+Verify the release's x86_64 QCOW2 against `SHA256SUMS`. In the commands below, replace `x86_64-release.qcow2` with the downloaded filename. For VMware Workstation or Fusion on an Intel Mac, create a VMDK on a computer with `qemu-img`. [QEMU image tools](https://www.qemu.org/docs/master/tools/qemu-img.html)
+
+```sh
+qemu-img convert -p -f qcow2 -O vmdk \
+  -o subformat=monolithicSparse,adapter_type=lsilogic \
+  x86_64-release.qcow2 edgeos-x86_64.vmdk
+qemu-img compare -f qcow2 -F vmdk x86_64-release.qcow2 edgeos-x86_64.vmdk
+```
+
+Create a 64-bit Linux VM and attach the VMDK as its existing boot disk. If you select UEFI, disable Secure Boot.
+
+For ESXi, create a compressed `streamOptimized` VMDK for transfer to the host.
+
+```sh
+qemu-img convert -p -c -f qcow2 -O vmdk \
+  -o subformat=streamOptimized,adapter_type=lsilogic \
+  x86_64-release.qcow2 edgeos-x86_64-esxi-import.vmdk
+```
+
+Upload that file to the VM's datastore directory. From that directory **on the ESXi host**, import it into a native VMFS disk. [VMware disk conversion with vmkfstools](https://knowledge.broadcom.com/external/article/343140/)
+
+```sh
+vmkfstools -i edgeos-x86_64-esxi-import.vmdk edgeos-x86_64-esxi.vmdk -d thin
+```
+
+The import creates the descriptor `edgeos-x86_64-esxi.vmdk` and the data file `edgeos-x86_64-esxi-flat.vmdk`. Keep them together. In the VM settings, add the **descriptor** as an existing hard disk. Use EFI with Secure Boot disabled. If using SCSI, select LSI Logic SAS. Directly attaching the transfer image can fail with an unsupported disk type 22 error. [VMware VMDK descriptor and flat file](https://knowledge.broadcom.com/external/article/321422)
+
+## ARM64 UEFI
+
+Use an ARM64 VM with 64-bit UEFI, Secure Boot disabled, and VirtIO storage and networking. Verify the downloaded file against `SHA256SUMS`. Import the ARM64 UEFI `.qcow2` as the VM boot disk, or decompress the `.img.gz` and write it to an empty 512-byte logical-sector boot disk. For Oracle Cloud, follow [the OCI Ampere A1 instructions](#oracle-cloud-infrastructure-oci-ampere-a1).
+
+With factory settings, `eth0` obtains its address through DHCP. Open the Web UI over HTTPS and sign in with the factory account. The `ttyAMA0` serial console is available for troubleshooting or initial CLI access.
+
+Use the ARM64 UEFI `-release.tar` to upgrade an existing ARM64 UEFI Open EdgeOS A/B installation. To migrate an earlier single-slot ARM64 installation, back up the configuration, install the new disk image, then restore the configuration.
+
+### Oracle Cloud Infrastructure (OCI Ampere A1)
+
+This procedure creates a new `VM.Standard.A1.Flex` instance from an Open EdgeOS custom image. If you are migrating from an existing OCI instance, keep its instance and boot volume until the new instance is working.
+
+#### 1. Verify and upload the image
+
+1. Download the `arm64_uefi.v0.2.0-dev.*-release.qcow2` asset and `SHA256SUMS` from the same release. Compare the QCOW2 file's SHA-256 against its entry in the checksum file. Use the [download verification commands](#3-verify-the-firmware-download) with the QCOW2 filename.
+2. In the OCI Console, select the region where you will create the instance. Open **Storage → Object Storage → Buckets**. Create or select a private bucket and upload the intact QCOW2 file. Use the same region and a compartment you can access for the import. [Oracle custom Linux image import](https://docs.oracle.com/en-us/iaas/Content/Compute/Tasks/importingcustomimagelinux.htm)
+
+#### 2. Import the custom image and set its capabilities
+
+1. Go to **Compute → Custom Images → Import image**. Select the compartment, give the image a name, and use the following settings.
+
+   | Field | Value |
+   | --- | --- |
+   | Operating system | Linux |
+   | Import source | Object Storage bucket, then the uploaded QCOW2 object |
+   | Image type | QCOW2 |
+   | Launch mode | Paravirtualized mode |
+
+2. Wait for the custom image to show **Available**. Open it and use **Edit details** to add `VM.Standard.A1.Flex` to the compatible shapes if needed. If the editor does not list A1, try the OCI CLI in Cloud Shell with the custom image's OCID. [Edit compatible shapes](https://docs.oracle.com/en-us/iaas/Content/Compute/Tasks/custom-images-edit.htm) · [OCI CLI reference](https://docs.oracle.com/en-us/iaas/tools/oci-cli/latest/oci_cli_docs/cmdref/compute/image-shape-compatibility-entry/add.html)
+
+   ```sh
+   oci compute image-shape-compatibility-entry add \
+     --image-id 'IMAGE_OCID' --shape-name VM.Standard.A1.Flex
+   ```
+
+3. Under **Edit image capabilities**, check that the firmware and preferred firmware are **UEFI 64-bit** (`UEFI_64`), Secure Boot is disabled, and launch mode, boot volume type, and network attachment type are **Paravirtualized**. Set the corresponding preferred values to the same options where shown. [OCI image capabilities](https://docs.oracle.com/en-us/iaas/Content/Compute/Tasks/configuringimagecapabilities-tasks.htm)
+
+#### 3. Create the instance and configure management access
+
+1. Go to **Compute → Instances → Create instance**. Under **Change image → My images → Custom images**, select the image you imported. Under **Change shape → Virtual machine → Ampere**, select `VM.Standard.A1.Flex`. Choose OCPUs and memory within your tenancy limits. Keep the default boot volume size offered by OCI and verify that the launch options still use paravirtualized storage and networking. [Create an OCI instance](https://docs.oracle.com/en-us/iaas/Content/Compute/Tasks/launchinginstance.htm)
+2. Select a VCN and subnet with IPv4 available for the primary VNIC. For private management, use a subnet reachable from your administration network and connect to the VNIC's private IP. For direct internet access, assign a public IPv4 address in a public subnet with an Internet Gateway and a `0.0.0.0/0` route to it. In the applicable NSG or security list, allow inbound TCP 443 for Web management only from your administration CIDR. If you use SSH, restrict TCP 22 to that same range. Check all applicable rules for broader access. [Oracle public subnet connectivity](https://docs.oracle.com/en-us/iaas/Content/Compute/Tasks/quick-action-internet-gateway.htm)
+3. Create the instance and wait for **Running**. In the instance details, find the primary VNIC's private or public IPv4 address.
+
+#### 4. First sign-in through the Web UI
+
+1. At first boot, `eth0` obtains the primary VNIC's private IPv4 address via DHCP. From the administration network, open `https://INSTANCE_IP/` using the reachable private or public IPv4 address.
+2. Sign in with username `ubnt` and password `ubnt`. Change the factory password in **Users** after signing in. [EdgeOS user accounts](https://help.uisp.com/hc/en-us/articles/22591215486103-EdgeRouter-User-Accounts)
+3. If the Web UI is unreachable, check the instance's address and inbound TCP 443 in OCI. Use the serial console to check the guest when network access is unavailable.
+
+#### 5. Serial console and optional SSH access
+
+In the instance details, open **Console connection** under **Resources** or the **OS Management** tab, then choose **Launch Cloud Shell connection**. If Cloud Shell is unavailable, create a local serial console connection and use the SSH command provided by OCI. At the `ttyAMA0` guest login prompt, use the EdgeOS account with its current password. [OCI serial console](https://docs.oracle.com/en-us/iaas/Content/Compute/References/serialconsole.htm)
+
+SSH password authentication is disabled by default. If you need SSH access, install a public key through EdgeOS. OCI passes keys from the instance creation form as metadata.
+
+1. On your **administration computer**, use an existing Ed25519 key or create one.
+
+   ```sh
+   ssh-keygen -t ed25519 -f ~/.ssh/edgeos_oci
+   awk '{print $2}' ~/.ssh/edgeos_oci.pub
+   ```
+
+2. In the **EdgeOS serial console**, replace `BASE64_PUBLIC_KEY` with the second field from the `.pub` file.
+
+   ```text
+   configure
+   set system login user ubnt authentication public-keys oci-admin type ssh-ed25519
+   set system login user ubnt authentication public-keys oci-admin key 'BASE64_PUBLIC_KEY'
+   commit
+   save
+   exit
+   show interfaces
+   show ip route
+   ```
+
+   Confirm that `eth0` received the primary VNIC's private IPv4 address via DHCP and that a default route is present. For internet connections, use the public IPv4 shown by OCI, which maps to the VNIC's private IP.
+
+3. Keep the serial session open and connect from the **administration computer**. Replace `INSTANCE_IP` with the reachable VNIC address. On first connection, verify the presented host-key fingerprint via the serial console. For an Ed25519 host key, use `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the guest.
+
+   ```sh
+   ssh -o IdentitiesOnly=yes -i ~/.ssh/edgeos_oci ubnt@INSTANCE_IP
+   ```
+
+#### 6. Check boot, persistence, and recovery
+
+- Check `show version` and `show system image` in the EdgeOS operational CLI. Confirm the ARM64 UEFI build and the running and default image. For the Web UI, open `https://INSTANCE_IP/` from the authorized administration network and verify the certificate before signing in.
+- Reboot normally and confirm you can sign in through the Web UI again. If you configured SSH, verify public-key login. Keep a copy of the saved configuration outside the instance.
+- If you will route traffic for other instances, first configure and verify EdgeOS routing and firewall rules. Then enable **Skip source/destination check** on the forwarding VNIC and use its **private IP** as the OCI route target for the intended destination CIDRs. [Oracle VCN route targets](https://docs.oracle.com/en-us/iaas/Content/Network/Tasks/managingroutetables.htm)
+
+| Symptom | Check |
+| --- | --- |
+| Import fails or A1 is unavailable | Check the import work request, the QCOW2 checksum, Object Storage read permissions, region and compartment, A1 shape compatibility, and tenancy capacity or quota. |
+| Instance is running with no guest login prompt | Check the serial connection and boot output. Confirm `UEFI_64`, Secure Boot disabled, paravirtualized boot volume, and that the image is the ARM64 UEFI QCOW2. |
+| Serial login works but HTTPS or SSH times out | Compare the private DHCP address with the VNIC. Check the target IP, subnet routes, OCI NSG and security list rules, and the guest firewall. |
+| SSH responds with `Permission denied (publickey)` | Check that you are connecting as `ubnt` with the matching private key, and that the key type and base64 value were committed and saved in EdgeOS. |
+
+Use the ARM64 UEFI upgrade archive for subsequent firmware updates on this instance. [A/B upgrades](#ab-upgrades)
+
+## A/B upgrades
+
+Back up the configuration and verify the SHA-256 of the platform-specific upgrade archive. In the operational CLI, run `add system image /tmp/firmware.tar` with the actual archive path. After installation succeeds, use `show system image` to confirm the default boot image, then reboot normally and check `show version`. Both slots share `/config`. If needed, select the previous slot from GRUB or use `set system image default-boot` from a running system after checking which slot it will select.

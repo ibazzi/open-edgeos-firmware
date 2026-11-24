@@ -2,7 +2,7 @@
 
 English | [简体中文](README.zh-CN.md)
 
-Community firmware development for Ubiquiti EdgeRouter devices, currently focused on the **EdgeRouter 4 (ER-4)**.
+Community firmware development for the **Ubiquiti EdgeRouter 4 (ER-4)**, x86_64 systems, and ARM64 UEFI virtual machines.
 
 This repository is the public home for firmware releases, release notes, bug reports, and project discussion. It is an independent project and is not affiliated with or endorsed by Ubiquiti.
 
@@ -16,19 +16,21 @@ The project aims to bring a newer Linux foundation to existing EdgeRouter device
 
 The current implementation combines:
 
-- An OpenWrt-based Octeon kernel and board support, currently using Linux 6.12.112.
-- A Debian Buster MIPS big-endian O32 user space.
+- Linux 6.18.60 with OpenWrt kernel inputs and platform-specific board support in v0.2.0-dev.
+- Debian Buster user space for MIPS big-endian O32 (ER-4), amd64 (x86_64), and arm64 (ARM64 UEFI).
 - The Vyatta/EdgeOS management layer, with compatibility work for the newer kernel and runtime.
 
 Compatibility with existing EdgeOS behavior is a project goal. Complete feature parity and automatic migration of every existing configuration have not been established. A newer kernel alone also does not establish that every user-space component is current or that the firmware meets a security maintenance baseline.
 
 ## Supported devices
 
-“Current target” identifies the device under development; it does not mean all functions have passed acceptance.
+The table lists the v0.2.0-dev release targets. See the release notes for platform compatibility and validation scope.
 
 | Device | Status |
 | --- | --- |
-| **EdgeRouter 4 (ER-4)** | Current development and hardware testing target; experimental support |
+| **EdgeRouter 4 (ER-4)** | Native EdgeOS system-image upgrade archive |
+| **x86_64** | Disk images for PCs and VMs, plus an upgrade archive for existing Open EdgeOS A/B installations |
+| **ARM64 UEFI** | Disk images for ARM64 UEFI VMs with VirtIO, plus an upgrade archive for existing Open EdgeOS A/B installations |
 | EdgeRouter 6P (ER-6P), EdgeRouter 12 (ER-12), EdgeRouter 12P (ER-12P) | Not validated; board, port, and boot compatibility remain unverified |
 | Other EdgeRouter models | No supported release at present |
 
@@ -36,29 +38,22 @@ A shared platform or firmware family name, including `e300`, does not establish 
 
 ## Current progress
 
-Last updated: **2026-10-31 (Asia/Shanghai)**. This summary reflects recorded development and test results.
+Updated **2026-11-24 (Asia/Shanghai)**. The table summarizes development testing for the three release targets.
 
-The project has moved from pre-hardware development to hardware acceptance. Selected ER-4 debug-firmware tests have passed; full product and release acceptance remain open. The latest hardware test round is paused.
-
-| Area | Current progress | Remaining validation |
+| Platform and area | Development results | Remaining validation |
 | --- | --- | --- |
-| Build and packaging | Firmware images and Debian package sets have been built and checked; debug and release packaging modes exist | Final release artifact binding and clean rebuild verification |
-| Boot and management | ER-4 boot, CLI/SSH, Web login and selected live statistics, configuration persistence, and normal reboot tested in defined scenarios | Full management, migration, failure, and recovery matrix |
-| Networking and routing | Selected static routing, bridge/VLAN, firewall/NAT, BGP, and OSPFv2 flows tested on ER-4, including isolated peers | Full physical topology, IPv6 protocol variants, and feature combinations |
-| VPN and services | Selected WireGuard, GRE, IPsec, OpenVPN, DHCP, and DNS scenarios tested | Complete configuration, lifecycle, physical-peer, and interoperability coverage |
-| Physical ports and SFP | Physical eth0 traffic tested; limited SFP error handling and shared statistics behavior checked | eth1/eth2/eth3 physical traffic, SFP data traffic, hot-plug, and full port matrix |
-| DPI, acceleration, MPLS, and extensions | Implementations and selected software/native checks exist; some control, classification, and statistics paths tested | Full forwarding paths, hardware acceleration, SMP/load behavior, and end-to-end feature acceptance |
-| Stability, upgrade, and recovery | Normal reboot and selected restoration scenarios tested | Sustained traffic/load, power loss, independent recovery, upgrade/rollback, and final release acceptance |
+| ER-4 installation and management | On November 23, an ER-4 upgraded through the native CLI and booted a Linux 6.18.60 development image. Saved and active configurations were preserved, and HTTPS management was reachable. | First installation of the release image, configuration migration, rollback, and independent recovery |
+| ER-4 routing, VPN, and DPI | Hardware tests covered dual-stack static routing, IPv4 BGP, and OSPFv2. A private mGRE topology verified authenticated NHRP registration, route advertisement and withdrawal, and forwarding over IKEv2 ESP. A module update was used to verify QUIC v1/v2 classification. | More external peers and configuration combinations, fragmented HTTP/3 classification, full port and SFP traffic coverage, acceleration, and sustained load |
+| x86_64 and ARM64 UEFI | On November 24, development images on both platforms completed A/B upgrades and rebooted with saved and active configurations preserved and HTTPS management available. Subsequent candidate images booted to serial login in isolated UEFI VMs. | Deployment of the subsequent candidates, BIOS/UEFI and different disk sector sizes on x86_64 hardware, ARM64 cloud import, and rollback |
+| x86_64 and ARM64 UEFI networking | On November 24, a private topology with an ER2 verified selected dual-stack routing, MPLS/LDP, GRE/NHRP, IKEv2, dual-stack firewall, IPv4 NAT, DNS forwarding, and DHCPv4 scenarios. Further checks covered NHRP Witness failover and failback, and DNS application blocking and recovery after rule removal with the candidate DPI component. | Broader device interoperability, failure combinations, sustained load, power loss, and recovery |
 
-Some device tests use isolated or synthetic peers. They do not establish external-device interoperability, physical-port coverage, or hardware acceleration performance. Packaging mode `release` describes an artifact build mode; it is not a stability certification.
-
-The test device also contains incremental component updates beyond earlier complete images. Earlier image checks do not cover those later updates automatically. Each public release must state the validation scope for its exact artifacts.
+Each result applies to the development image or component update used for that test. See the release notes for the validation scope of the published assets.
 
 ## Firmware downloads and installation
 
-See the [firmware installation guide](INSTALL.md) for preparation, checksum verification, Web/CLI installation, first-boot checks, and recovery considerations.
+Use the installation guide to choose the correct asset for your platform and check installation and recovery requirements. [Firmware installation guide](INSTALL.md)
 
-Published firmware belongs in this repository's **GitHub Releases** section. Use the notes attached to the exact version for device support, known issues, and installation instructions. This README does not announce a stable release or imply that downloadable firmware is already available.
+See the release page for firmware assets, SHA-256 checksums, changes, and known issues for each version. [GitHub Releases](https://github.com/ibazzi/open-edgeos-firmware/releases)
 
 Each release should provide:
 
@@ -71,9 +66,7 @@ Each release should provide:
 
 Before installing, back up the original configuration and keep the backup off the router. Confirm the image model and checksum, and prepare the recovery access described in that release. Preserving `config.boot` does not guarantee that every configuration item will migrate successfully. Do not assume automatic rollback.
 
-Before first installation, update both the official EdgeOS firmware and the bootloader to the latest official versions available for your exact model in the official EdgeOS environment. Complete all required reboots and verify both updates before proceeding. See the [bootloader prerequisite](INSTALL.md#bootloader-prerequisite) for checks and the official update reference. This project's system-image installation does not perform those prerequisite updates.
-
-The current development firmware skips automatic bootloader writes, marks the SPI bootloader partitions read-only, preserves the native storage layout, and uses kernel-owned root mounting and standard systemd shutdown. See [boot and storage safeguards](INSTALL.md#boot-and-storage-safeguards) for their scope and release-specific verification requirements. These measures do not guarantee recovery, complete unmounting, power-loss safety, or automatic rollback.
+Before first installation on ER-4, update to the latest official EdgeOS firmware and the latest official bootloader for that model. Complete the updates and verify them in the official EdgeOS environment. [Bootloader prerequisite](INSTALL.md#bootloader-prerequisite)
 
 ## Bug reports and discussion
 
